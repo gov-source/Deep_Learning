@@ -1,0 +1,264 @@
+#Loading the essential packages
+library(car) #To check for multicollinearity
+install.packages("corrplot")
+library(corrplot) #for correlation analysis
+library(MASS)
+boston <- Boston
+
+#DATA EXPLORATION
+names(boston)
+head(boston)
+str(boston)
+summary(boston)
+boxplot(boston)
+
+#Studying potential variables 
+#Crime rate per town (CRIM)
+hist(boston$crim)
+nrow(subset(boston, crim < 10))#435 observations have crime rate less than 10
+nrow(subset(boston, crim >50)) #4 observations have crime rate greater than 50
+nrow(subset(boston, crim >80))#1 observation has crime rate greater than 80
+
+#Average number of rooms (RM)
+hist(boston$rm)
+nrow(subset(boston, rm > 7))#64 observations have rooms more than 7
+nrow(subset(boston, rm > 8))#13 observations have rooms more than 8
+nrow(subset(boston, rm < 4)) #2 observations have rooms less than 4
+nrow(subset(boston, rm < 3)) #No observations have rooms less than 3
+
+#full-value property-tax rate per $10,000 (TAX)
+hist(boston$tax)
+nrow(subset(boston, tax> 600)) #137 observations pay tax rates higher than 600
+nrow(subset(boston, tax< 600)) #369 observations pay tax rates lower than 60
+
+#DATA PREPARATION
+#Copy the dataset boston to a new dataframe boston_new
+boston_new <- boston
+
+#Replace the missing values (NA's) from the variables with their respective median values
+boston_new$crim[which(is.na(boston_new$crim))] <- median(boston_new$crim, na.rm= T)
+boston_new$ZN[which(is.na(boston_new$ZN))] <- median(boston_new$ZN, na.rm= T)
+boston_new$INDUS[which(is.na(boston_new$INDUS))] <- median(boston_new$INDUS, na.rm= T)
+boston_new$CHAS[which(is.na(boston_new$CHAS))] <- median(boston_new$CHAS, na.rm= T)
+boston_new$AGE[which(is.na(boston_new$AGE))] <- median(boston_new$AGE, na.rm= T)
+boston_new$LSTAT[which(is.na(boston_new$LSTAT))] <- median(boston_new$LSTAT, na.rm= T)
+summary(boston_new)
+
+#correlation analysis
+boston_cor <- cor(boston_new) #All 14 variables
+corrplot(boston_cor, method = "circle") 
+
+#Convert variables CHAS and RAD from integer to factor
+boston_new$CHAS <- as.factor(boston_new$CHAS)
+boston_new$RAD <- as.factor(boston_new$RAD)
+levels(boston_new$RAD) <- c(1,2,3,4,5,6,7,8,24) 
+str(boston_new)
+summary(boston_new)
+
+
+#Positive correlations are displayed in blue and negative correlations in red color.
+#Color intensity and the size of the circle are proportional to the correlation coefficients.
+#Variables are highly correlated to itelf.(example: CRIM with CRIM, ZN with ZN, etc.)
+
+#Building gaussain(normal) model
+#By log transformation of this variable, we are able to get a normal distribution
+
+#MODEL BUILDING
+#Split the dataset boston_new into train and test data (70% for train and 30% for test)
+set.seed(1234)
+training <- sample(1:nrow(boston_new), 0.7*nrow(boston_new))
+train <- boston_new[training,]
+test <- boston_new[-training,]
+
+#Model building with all the independant variables
+fit <- lm(log(medv) ~., data= train)
+fit
+summary(fit) #Adjusted R-squared:  0.7777 
+
+#Model building by dropping insignificant variables ZN, INDUS, AGE
+fit1 <- update(fit, ~. - zn - indus - age)
+fit1
+summary(fit1)#Adjusted R-squared:  0.7664
+
+#Checking for multicollinearity
+vif(fit1, th=5)#RAD and TAX have VIF greater than 5
+
+
+#Model building by dropping RAD and TAX
+fit2 <- update(fit1, ~. - rad - tax)
+fit2
+summary(fit2)#Adjusted R-squared:  0.7482 
+
+#PERFORMANCE OF THE MODEL
+predict_train <- predict(fit2, train) #for known data
+predict_test <- predict(fit2, test) #for unseen data
+
+#Calculating Mean square error as performance metrics for regression
+mse_train <- mean((exp(predict_train) - train$medv)^2)
+mse_train #19.05781
+
+mse_test <- mean((exp(predict_test) - test$medv)^2)
+mse_test # 21.24562
+
+hist(fit2$residuals) #errors are normally distributed
+
+plot(train$medv , fit2$residuals) #variance is constant i.e Homoscedasticity of variance
+abline(h=0, col = "red") 
+
+par(mfrow = c(2,2)) 
+plot(fit2) #Residual versus fitted values
+
+#Predicted results for our model
+train$predicted_MEDV <- exp(predict_train) #known data #Predicted values are now in train data frame
+test$predicted_MEDV <- exp(predict_test) #unseen data #Predicted values are now in test data frame
+print(train$predicted_MEDV)
+print(test$predicted_MEDV)
+
+
+
+#Build model for linear regression
+
+
+#Model building with all the independant variables
+fit <- lm(medv ~., data= train)
+summary(fit) #Adjusted R-squared:  0.7413 
+
+#Model building by dropping insignificant variables ZN, INDUS, AGE
+fit1 <- update(fit, ~. - zn - indus - age)
+fit1
+summary(fit1)#Adjusted R-squared:  0.7357
+
+#Checking for multicollinearity
+vif(fit1, th=5)#RAD and TAX have VIF greater than 5
+
+
+#Model building by dropping RAD and TAX
+fit2 <- update(fit1, ~. - rad - tax)
+fit2
+summary(fit2)#Adjusted R-squared:  0.7275 
+
+#PERFORMANCE OF THE MODEL
+predict_train <- predict(fit2, train) #for known data
+predict_test <- predict(fit2, test) #for unseen data
+
+#Calculating Mean square error as performance metrics for regression
+mse_train <- mean((predict_train - train$medv)^2)
+mse_train #22.25329
+
+mse_test <- mean((predict_test - test$medv)^2)
+mse_test # 28.19207
+
+hist(fit2$residuals) 
+
+plot(train$medv , fit2$residuals) #variance is constant i.e Homoscedasticity of variance
+abline(h=0, col = "red") 
+
+par(mfrow = c(2,2)) 
+plot(fit2) #Residual versus fitted values
+
+#Predicted results for our model
+train$predicted_MEDV <- exp(predict_train) #known data #Predicted values are now in train data frame
+test$predicted_MEDV <- exp(predict_test) #unseen data #Predicted values are now in test data frame
+
+
+
+#building polynomial regression of order 2
+
+fit <- lm(poly(medv, 2) ~., data= train)
+summary(fit) #Adjusted R-squared:  0.4023 
+
+#Model building by dropping insignificant variables ZN, INDUS, AGE
+fit1 <- update(fit, ~. - zn - indus - age)
+summary(fit1)#Adjusted R-squared:  0.3911
+
+#Model building by dropping RAD and TAX
+fit2 <- update(fit1, ~. - rad - tax)
+fit2
+summary(fit2)#Adjusted R-squared:  0.3875 
+
+#PERFORMANCE OF THE MODEL
+predict_train <- predict(fit2, train) #for known data
+predict_test <- predict(fit2, test) #for unseen data
+
+#Calculating Mean square error as performance metrics for regression
+mse_train <- mean((predict_train - poly(train$medv, 2))^2)
+mse_train #9.27
+
+mse_test <- mean((predict_test - poly(test$medv, 2))^2)
+mse_test  #.0036
+
+hist(fit2$residuals) #error distribution
+
+plot(poly(train$medv, 2) , fit2$residuals) #variance
+abline(h=0, col = "red") 
+
+#Predicted results for our model
+train$predicted_MEDV <- exp(predict_train) #known data #Predicted values are now in train data frame
+test$predicted_MEDV <- exp(predict_test) #unseen data #Predicted values are now in test data frame
+print(train$predicted_MEDV)
+print(test$predicted_MEDV)
+
+# polynomial model of order 5
+
+fit <- lm(poly(medv, 5) ~., data= train)
+summary(fit) #Adjusted R-squared:  0.4023 
+
+#Model building by dropping insignificant variables ZN, INDUS, AGE
+fit1 <- update(fit, ~. - zn - indus - age)
+summary(fit1)#Adjusted R-squared:  0.3911
+
+#Model building by dropping RAD and TAX
+fit2 <- update(fit1, ~. - rad - tax)
+fit2
+summary(fit2)#Adjusted R-squared:  0.3875 
+
+#PERFORMANCE OF THE MODEL
+predict_train <- predict(fit2, train) #for known data
+predict_test <- predict(fit2, test) #for unseen data
+
+#Calculating Mean square error as performance metrics for regression
+mse_train <- mean((predict_train - poly(train$medv, 5))^2)
+mse_train #9.2853
+
+mse_test <- mean((predict_test - poly(test$medv, 5))^2)
+mse_test  #.0052
+
+hist(fit2$residuals) #error distribution
+
+plot(poly(train$medv, 5) , fit2$residuals) #variance
+abline(h=0, col = "red") 
+
+
+#Predicted results for our model
+train$predicted_MEDV <- exp(predict_train) #known data #Predicted values are now in train data frame
+test$predicted_MEDV <- exp(predict_test) #unseen data #Predicted values are now in test data frame
+print(train$predicted_MEDV)
+print(test$predicted_MEDV)
+
+
+#Baysian model
+
+library(BAS)
+model_bas <- bas.lm(medv ~ .,
+                    data =train,
+                    method = "MCMC",
+                    prior = "ZS-null",
+                    modelprior = uniform())
+model_bas
+#we see top 5 models
+summary(model_bas)
+#visualize the Log Posterior Odds and Model Rank.
+image(model_bas, rotate=F)
+#obtain the coefficients estimate
+coef_model <- coef(model_bas)
+par(mfrow=c(3,2))
+plot(coef_model, subset = c(1, 2, 3, 4, 9, 10), ask=F)
+confint(coef_model)
+#Residuals vs fitted plot
+plot(model_bas, which = 1, ask=F)
+#cumumlative probability
+plot(model_bas, which = 2, ask=F)
+#Model complexity
+plot(model_bas, which = 3, ask=F)
+#Marginal inclusion probabilities
+plot(model_bas, which = 4, ask=F)
